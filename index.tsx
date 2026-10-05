@@ -340,7 +340,7 @@ export default definePlugin({
     name: "Custom Pages",
     description: "Add your own web pages to Discord, as home sidebar tabs or as server icons.",
     authors: [
-        { name: "Mimiez", id: 0n },
+        { name: "xMimiez", id: 0n },
         { name: "BunnyHoper", id: 0n }
     ],
     dependencies: ["ServerListAPI"],

@@ -93,9 +93,9 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 
 ## 💖 ᴄʀᴇᴅɪᴛѕ
 
-<a href="https://github.com/mimiez"><img src="assets/mimiez.png" width="96" height="96" alt="Mimiez" /></a>
+<a href="https://github.com/xMimiez"><img src="assets/xmimiez.jpg" width="96" height="96" alt="xMimiez" /></a>
 
-Huge thanks to **[Mimiez](https://github.com/mimiez)** (Mime | N0_.q3) — this plugin is built on top of their original **Nighty Tab** plugin for Vencord. 🙏
+Huge thanks to **[xMimiez](https://github.com/xMimiez)** (Mime | N0_.q3) — this plugin is built on top of their original **Nighty Tab** plugin for Vencord. 🙏
 
 ---
 
