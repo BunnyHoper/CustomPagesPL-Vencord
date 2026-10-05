@@ -71,7 +71,7 @@ export function PagesEditor() {
         <section className={Margins.top8}>
             <BaseText size="md" weight="semibold">Pages</BaseText>
             <Paragraph size="sm" className={Margins.top8}>
-                After adding a page or changing its URL or logo, press Ctrl+R once so Discord allows it. Pages without a custom logo use the website's own, saved once and reused. Right-click any page icon to come back here.
+                Changes apply right away. Pages without a custom logo use the website's own, saved once and reused. Right-click any page icon to come back here.
             </Paragraph>
 
             <Flex flexDirection="column" gap="0.75em" className={Margins.top8}>

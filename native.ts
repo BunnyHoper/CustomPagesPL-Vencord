@@ -152,6 +152,12 @@ function permitPages(pages: SavedPage[] | undefined) {
 // New/edited pages are allowed when opened (allowEmbed) and need one Ctrl+R.
 permitPages(RendererSettings.store.plugins?.["Custom Pages"]?.pages ?? DEFAULT_PAGES);
 
+// Any https page (plus local http) can be framed without a reload, so switching a page to
+// another website just works. Header unlocking (X-Frame-Options, frame-ancestors) still only
+// applies to hosts of your pages, and is added live when a page opens.
+for (const source of ["https:", "http://localhost:*", "http://127.0.0.1:*"])
+    allowDirective(source, "frame-src");
+
 // Website logo for pages without a custom one. Fetched here (no CSP in the main process)
 // and handed back as a data: URL, which the renderer caches.
 const MAX_ICON_BYTES = 512 * 1024;
@@ -193,6 +199,11 @@ function iconLinks(html: string, base: string) {
         } catch { /* bad href */ }
     }
     return found.sort((a, b) => b.size - a.size).map(icon => icon.href);
+}
+
+// Custom logo URLs go through here too: no img-src CSP entry, no reload, cached like site logos.
+export async function fetchImage(_event: IpcMainInvokeEvent, url: string): Promise<string | null> {
+    return safeOrigin(url) ? imageAsDataUrl(url) : null;
 }
 
 export async function fetchSiteIcon(_event: IpcMainInvokeEvent, pageUrl: string): Promise<string | null> {

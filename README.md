@@ -21,7 +21,7 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 *   **Automatic Logos:** Each page uses the website's own logo, downloaded once and cached — no logo URL needed. Want another one? Set a custom logo URL. Nothing found → the first letter of the page name.
 *   **Stays Loaded:** Leave a page and it keeps running in the background — come back and it's exactly where you left it. After **5 minutes** unused it unloads on its own to free memory (configurable).
 *   **Right-Click → Settings:** Right-click any page icon or tab to jump straight into the editor.
-*   **Embed Unlocker:** Allows each page in Discord's CSP (`frame-src` / `img-src`) and strips `X-Frame-Options` / `frame-ancestors` only for your pages, so they aren't blocked.
+*   **Embed Unlocker:** Any `https` page (and local `http`) can be embedded right away — switch a page to another website and it just loads, no reload. `X-Frame-Options` / `frame-ancestors` are stripped only for your pages' hosts, so they aren't blocked.
 *   **Session Keeper:** Rewrites the pages' cookies so your logins survive inside the embed.
 *   **Restart-Safe:** Restarting or reloading Discord while on a page sends you back to the app instead of Discord's 404 page.
 *   **Plays Nice:** Works next to other plugins that add tabs or server icons, like [Nighty Tab](https://github.com/BunnyHoper/Nighty-Tab-Plugin) — its icon/tab stays above your pages.
@@ -66,7 +66,7 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 
 5.  **Fully restart Discord:** System tray → right-click Discord → **Quit Discord**, then open it again.
 
-6.  **Add your pages:** Settings → Vencord → Plugins → **Custom Pages** → **Add page**, fill in name, URL and logo, then press `Ctrl+R` once.
+6.  **Add your pages:** Settings → Vencord → Plugins → **Custom Pages** → **Add page**, fill in a name and URL (the logo is picked up from the website).
 
 ---
 
@@ -74,7 +74,7 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 
 | Setting | Default | Action |
 | :--- | :---: | :--- |
-| `Pages` | — | Your pages: name, URL and an optional custom logo (blank = the website's own). Reorder with ▲ ▼, delete with the bin. `Ctrl+R` once after adding a page or changing a URL/logo. |
+| `Pages` | — | Your pages: name, URL and an optional custom logo (blank = the website's own). Reorder with ▲ ▼, delete with the bin. Changes apply right away (only a plain `http` address on another device of your LAN needs one reload — the page offers a button). |
 | `Show as servers` | `off` | One server icon per page at the top of the server list + full-width pages. Off = home sidebar tabs. |
 | `Keep loaded in background` | `on` | Keeps pages alive when you leave them. Off = they unload and reload on every visit. |
 | `Unload after (minutes)` | `5` | How long an unused page stays loaded in the background before it unloads. `0` = never. |
@@ -85,9 +85,9 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 
 | Symptom | Fix |
 | :--- | :--- |
-| Page is empty / blocked | Press `Ctrl+R` once after adding it or changing its URL. |
+| Page is empty / blocked | Open the URL in a browser first. A plain `http` LAN address needs one reload — use the page's **Reload Discord** button. |
 | Still empty | Open the URL in a browser — if it doesn't load there, it won't load here either. |
-| Logo shows a letter | The site has no usable logo, or your custom logo URL is wrong/blocked — `Ctrl+R` after changing it, or set another image. |
+| Logo shows a letter | The site has no usable logo (e.g. a login page without favicon) — set a custom logo URL for that page. |
 | Nothing shows after install | Discord wasn't fully restarted. Quit it from the tray and reopen. |
 | Can't close Discord to restart | Discord is running as administrator — close it from the tray or Task Manager. |
 

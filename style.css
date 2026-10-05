@@ -153,3 +153,18 @@
     flex-direction: column;
     gap: 4px;
 }
+
+.vc-customPages-empty {
+    flex-direction: column;
+    gap: 12px;
+}
+
+.vc-customPages-reload {
+    padding: 8px 16px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--brand-500, #5865f2);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+}

@@ -203,11 +203,23 @@ function destroyKeeper() {
     keeper = null;
 }
 
+// Every https page and local http one is always embeddable (native.ts). Any other http address
+// (e.g. another PC on your LAN) is only allowed by Discord's CSP from the next load on.
+const embeddableAtLoad = new Set<string>();
+
+function needsReload(src: string) {
+    const url = new URL(src);
+    if (url.protocol === "https:" || url.hostname === "localhost" || url.hostname === "127.0.0.1") return false;
+    return !embeddableAtLoad.has(url.origin);
+}
+
 const PageView = ErrorBoundary.wrap(function PageView({ location }: { location?: { pathname: string; }; }) {
     const { pages } = settings.use(["pages"]);
     const id = pageIdFor(location?.pathname ?? window.location.pathname);
     const page = pages.find(p => p.id === id);
-    const src = pageUrl(page?.url);
+    const url = pageUrl(page?.url);
+    const blocked = url !== null && needsReload(url);
+    const src = blocked ? null : url;
     const title = page?.name || "Page";
     const anchorRef = useRef<HTMLDivElement | null>(null);
 
@@ -266,7 +278,12 @@ const PageView = ErrorBoundary.wrap(function PageView({ location }: { location?:
         <div className={cl("page")} ref={anchorRef}>
             {src === null && (
                 <div className={cl("empty")}>
-                    {page ? "This page has no valid URL. Right-click its icon to edit it." : "This page doesn't exist anymore."}
+                    {blocked ? (
+                        <>
+                            <span>Discord needs one reload to allow {new URL(url!).host}.</span>
+                            <button className={cl("reload")} onClick={() => window.location.reload()}>Reload Discord</button>
+                        </>
+                    ) : page ? "This page has no valid URL. Right-click its icon to edit it." : "This page doesn't exist anymore."}
                 </div>
             )}
         </div>
@@ -293,11 +310,11 @@ function useCurrentPageId() {
     return current;
 }
 
-// Website logos for pages without a custom one: fetched once by the main process, then kept
-// as a data: URL in DataStore (per origin) and mirrored in memory so they render instantly.
-const ICON_STORE_PREFIX = "CustomPages_siteIcon_";
-const siteIcons = new Map<string, string | null>();
-const siteIconRequests = new Map<string, Promise<string | null>>();
+// Page logos (the website's own, or a custom logo URL) are fetched by the main process and kept
+// as data: URLs in DataStore, mirrored in memory: they render instantly, need no CSP entry and no reload.
+const ICON_STORE_PREFIX = "CustomPages_icon_";
+const icons = new Map<string, string | null>();
+const iconRequests = new Map<string, Promise<string | null>>();
 
 function originOf(url: string | null) {
     if (!url) return null;
@@ -308,45 +325,61 @@ function originOf(url: string | null) {
     }
 }
 
-function loadSiteIcon(url: string, origin: string) {
-    let request = siteIconRequests.get(origin);
+// Skips half-typed hosts ("https://ex") so the editor doesn't fetch on every keystroke.
+function looksComplete(url: string | null) {
+    if (!url) return false;
+    const { hostname } = new URL(url);
+    return hostname === "localhost" || hostname.includes(".");
+}
+
+// key: "site:<origin>" or "custom:<logo url>".
+function iconKey(page: Page) {
+    const custom = pageUrl(page.icon);
+    if (custom) return looksComplete(custom) ? `custom:${custom}` : null;
+    if (!looksComplete(pageUrl(page.url))) return null;
+    const origin = originOf(pageUrl(page.url));
+    return origin ? `site:${origin}` : null;
+}
+
+function loadIcon(key: string) {
+    let request = iconRequests.get(key);
     if (!request) {
         request = (async () => {
-            const stored = await DataStore.get<string>(ICON_STORE_PREFIX + origin);
+            const stored = await DataStore.get<string>(ICON_STORE_PREFIX + key);
             if (stored) return stored;
-            const fetched = Native ? await Native.fetchSiteIcon(url) : null;
+            const target = key.slice(key.indexOf(":") + 1);
+            const fetched = !Native ? null
+                : key.startsWith("custom:") ? await Native.fetchImage(target) : await Native.fetchSiteIcon(target);
             // Failures are only remembered for this session, so the next start retries.
-            if (fetched) await DataStore.set(ICON_STORE_PREFIX + origin, fetched);
+            if (fetched) await DataStore.set(ICON_STORE_PREFIX + key, fetched);
             return fetched;
         })().then(icon => {
-            siteIcons.set(origin, icon);
-            siteIconRequests.delete(origin);
+            icons.set(key, icon);
+            iconRequests.delete(key);
             return icon;
         });
-        siteIconRequests.set(origin, request);
+        iconRequests.set(key, request);
     }
     return request;
 }
 
-function useSiteIcon(url: string | null) {
-    const origin = originOf(url);
-    const [icon, setIcon] = useState(() => (origin && siteIcons.get(origin)) || null);
+function usePageIcon(page: Page) {
+    const key = iconKey(page);
+    const [icon, setIcon] = useState(() => (key && icons.get(key)) || null);
 
     useEffect(() => {
-        if (!url || !origin) return setIcon(null);
-        if (siteIcons.has(origin)) return setIcon(siteIcons.get(origin) ?? null);
+        if (!key) return setIcon(null);
+        if (icons.has(key)) return setIcon(icons.get(key) ?? null);
         let live = true;
-        void loadSiteIcon(url, origin).then(found => live && setIcon(found));
+        void loadIcon(key).then(found => live && setIcon(found));
         return () => { live = false; };
-    }, [origin]);
+    }, [key]);
 
     return icon;
 }
 
 export function PageLogo({ page, className }: { page: Page; className?: string; }) {
-    const custom = pageUrl(page.icon);
-    const site = useSiteIcon(custom ? null : pageUrl(page.url));
-    const src = custom ?? site;
+    const src = usePageIcon(page);
     // A logo that fails to load (blocked, 404) falls back to the letter.
     const [failed, setFailed] = useState<string | null>(null);
 
@@ -439,9 +472,9 @@ export default definePlugin({
     start() {
         for (const page of settings.store.pages) {
             const src = pageUrl(page.url);
-            if (Native && src !== null) void Native.allowEmbed(src);
-            const logo = pageUrl(page.icon);
-            if (Native && logo !== null) void Native.allowImage(logo);
+            if (src === null) continue;
+            embeddableAtLoad.add(new URL(src).origin);
+            if (Native) void Native.allowEmbed(src);
         }
         // Deferred so items other plugins add while starting (e.g. Nighty Tab) stay above ours.
         serverListTimer = setTimeout(() => addServerListElement(ServerListRenderPosition.Above, PageServerIcons));
