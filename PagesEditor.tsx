@@ -71,7 +71,7 @@ export function PagesEditor() {
         <section className={Margins.top8}>
             <BaseText size="md" weight="semibold">Pages</BaseText>
             <Paragraph size="sm" className={Margins.top8}>
-                After adding a page or changing a URL or logo, press Ctrl+R once so Discord allows it. Right-click any page icon to come back here.
+                After adding a page or changing its URL or logo, press Ctrl+R once so Discord allows it. Pages without a custom logo use the website's own, saved once and reused. Right-click any page icon to come back here.
             </Paragraph>
 
             <Flex flexDirection="column" gap="0.75em" className={Margins.top8}>
@@ -90,7 +90,7 @@ export function PagesEditor() {
                         </div>
                         <Field label="Name" value={page.name} placeholder="My page" onChange={v => setField(page.id, "name", v)} />
                         <Field label="URL" value={page.url} placeholder="https://" error={urlError(page.url)} onChange={v => setField(page.id, "url", v)} />
-                        <Field label="Logo URL (blank = first letter)" value={page.icon} placeholder="https://…/logo.png" error={urlError(page.icon)} onChange={v => setField(page.id, "icon", v)} />
+                        <Field label="Custom logo URL (optional — blank = the website's own logo)" value={page.icon} placeholder="https://…/logo.png" error={urlError(page.icon)} onChange={v => setField(page.id, "icon", v)} />
                     </Card>
                 ))}
 

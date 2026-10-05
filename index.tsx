@@ -6,6 +6,7 @@
 
 import "./style.css";
 
+import * as DataStore from "@api/DataStore";
 import { plugins } from "@api/PluginManager";
 import { addServerListElement, removeServerListElement, ServerListRenderPosition } from "@api/ServerList";
 import { definePluginSettings } from "@api/Settings";
@@ -18,6 +19,7 @@ import { findByCodeLazy, findComponentByCodeLazy } from "@webpack";
 import { NavigationRouter, Tooltip, useEffect, useRef, useState } from "@webpack/common";
 import type { MouseEvent as ReactMouseEvent, ReactElement } from "react";
 
+import { DEFAULT_PAGES } from "./defaults";
 import { PagesEditor } from "./PagesEditor";
 
 const Native = IS_DISCORD_DESKTOP
@@ -39,7 +41,7 @@ export interface Page {
 export const settings = definePluginSettings({
     pages: {
         type: OptionType.CUSTOM,
-        default: [] as Page[],
+        default: DEFAULT_PAGES as Page[],
     },
     pagesEditor: {
         type: OptionType.COMPONENT,
@@ -58,6 +60,18 @@ export const settings = definePluginSettings({
         default: true,
         onChange(value: boolean) {
             if (!value) dropHiddenFrames();
+        }
+    },
+    unloadAfter: {
+        type: OptionType.NUMBER,
+        description: "Minutes a page stays loaded in the background before it unloads on its own. 0 = never.",
+        displayName: "Unload after (minutes)",
+        default: 5,
+        hidden() {
+            return !this.store.keepLoaded;
+        },
+        isValid(value: number) {
+            return value >= 0 || "Use 0 or more minutes.";
         }
     }
 });
@@ -134,6 +148,24 @@ function getKeeper() {
     return keeper;
 }
 
+// Background frames unload on their own after `unloadAfter` minutes hidden.
+const unloadTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function cancelUnload(id: string) {
+    clearTimeout(unloadTimers.get(id));
+    unloadTimers.delete(id);
+}
+
+function scheduleUnload(id: string) {
+    const minutes = settings.store.unloadAfter;
+    if (unloadTimers.has(id) || !(minutes > 0)) return;
+    unloadTimers.set(id, setTimeout(() => {
+        unloadTimers.delete(id);
+        const entry = frames.get(id);
+        if (entry && (entry.el.hidden || !keeper || keeper.hidden)) dropFrame(id);
+    }, minutes * 60_000));
+}
+
 function showFrame(id: string, src: string, title: string) {
     let entry = frames.get(id);
     if (!entry || entry.src !== src) {
@@ -146,10 +178,15 @@ function showFrame(id: string, src: string, title: string) {
         getKeeper().appendChild(el);
     }
     entry.el.title = title;
-    for (const [key, { el }] of frames) el.hidden = key !== id;
+    for (const [key, { el }] of frames) {
+        el.hidden = key !== id;
+        if (key === id) cancelUnload(key);
+        else scheduleUnload(key);
+    }
 }
 
 export function dropFrame(id: string) {
+    cancelUnload(id);
     frames.get(id)?.el.remove();
     frames.delete(id);
 }
@@ -221,6 +258,7 @@ const PageView = ErrorBoundary.wrap(function PageView({ location }: { location?:
             layer.hidden = true;
             document.body.classList.remove(ACTIVE_SERVER_CLASS);
             if (!settings.store.keepLoaded) dropFrame(id);
+            else scheduleUnload(id);
         };
     }, [id, src, title]);
 
@@ -255,8 +293,60 @@ function useCurrentPageId() {
     return current;
 }
 
+// Website logos for pages without a custom one: fetched once by the main process, then kept
+// as a data: URL in DataStore (per origin) and mirrored in memory so they render instantly.
+const ICON_STORE_PREFIX = "CustomPages_siteIcon_";
+const siteIcons = new Map<string, string | null>();
+const siteIconRequests = new Map<string, Promise<string | null>>();
+
+function originOf(url: string | null) {
+    if (!url) return null;
+    try {
+        return new URL(url).origin;
+    } catch {
+        return null;
+    }
+}
+
+function loadSiteIcon(url: string, origin: string) {
+    let request = siteIconRequests.get(origin);
+    if (!request) {
+        request = (async () => {
+            const stored = await DataStore.get<string>(ICON_STORE_PREFIX + origin);
+            if (stored) return stored;
+            const fetched = Native ? await Native.fetchSiteIcon(url) : null;
+            // Failures are only remembered for this session, so the next start retries.
+            if (fetched) await DataStore.set(ICON_STORE_PREFIX + origin, fetched);
+            return fetched;
+        })().then(icon => {
+            siteIcons.set(origin, icon);
+            siteIconRequests.delete(origin);
+            return icon;
+        });
+        siteIconRequests.set(origin, request);
+    }
+    return request;
+}
+
+function useSiteIcon(url: string | null) {
+    const origin = originOf(url);
+    const [icon, setIcon] = useState(() => (origin && siteIcons.get(origin)) || null);
+
+    useEffect(() => {
+        if (!url || !origin) return setIcon(null);
+        if (siteIcons.has(origin)) return setIcon(siteIcons.get(origin) ?? null);
+        let live = true;
+        void loadSiteIcon(url, origin).then(found => live && setIcon(found));
+        return () => { live = false; };
+    }, [origin]);
+
+    return icon;
+}
+
 export function PageLogo({ page, className }: { page: Page; className?: string; }) {
-    const src = pageUrl(page.icon);
+    const custom = pageUrl(page.icon);
+    const site = useSiteIcon(custom ? null : pageUrl(page.url));
+    const src = custom ?? site;
     // A logo that fails to load (blocked, 404) falls back to the letter.
     const [failed, setFailed] = useState<string | null>(null);
 

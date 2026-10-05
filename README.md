@@ -18,8 +18,8 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 
 *   **Unlimited Pages:** Add, edit, reorder and delete pages from the plugin settings. Each page has a name, a URL and a logo.
 *   **Two Layouts:** Home sidebar tabs under Quests, or **server icons** at the top of the server list that open full width, like a whole server.
-*   **Custom Logos:** Any image URL. Blank or broken → the first letter of the page name.
-*   **Stays Loaded:** Leave a page and it keeps running in the background — come back and it's exactly where you left it. Toggle in settings.
+*   **Automatic Logos:** Each page uses the website's own logo, downloaded once and cached — no logo URL needed. Want another one? Set a custom logo URL. Nothing found → the first letter of the page name.
+*   **Stays Loaded:** Leave a page and it keeps running in the background — come back and it's exactly where you left it. After **5 minutes** unused it unloads on its own to free memory (configurable).
 *   **Right-Click → Settings:** Right-click any page icon or tab to jump straight into the editor.
 *   **Embed Unlocker:** Allows each page in Discord's CSP (`frame-src` / `img-src`) and strips `X-Frame-Options` / `frame-ancestors` only for your pages, so they aren't blocked.
 *   **Session Keeper:** Rewrites the pages' cookies so your logins survive inside the embed.
@@ -34,6 +34,7 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 | :--- | :---: | :--- |
 | `index.tsx` | **Core** | The plugin: settings, tabs, server icons, `/custom-pages/<id>` pages. |
 | `PagesEditor.tsx` | **UI** | The page list editor shown in the plugin settings. |
+| `defaults.ts` | **Data** | The two pages that come with the plugin (the author's GitHub), shown until you edit the list. |
 | `native.ts` | **Native** | Main-process side: CSP, header and cookie fixes, restart redirect. |
 | `style.css` | **Style** | Server icons, embedded pages and the editor. |
 | `vencord-csp.patch` | **Patch** | Small patch for Vencord's `src/main/csp/index.ts` that lets the plugin hook response headers. **Required.** |
@@ -73,9 +74,10 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 
 | Setting | Default | Action |
 | :--- | :---: | :--- |
-| `Pages` | — | Your pages: name, URL, logo. Reorder with ▲ ▼, delete with the bin. `Ctrl+R` once after adding a page or changing a URL/logo. |
+| `Pages` | — | Your pages: name, URL and an optional custom logo (blank = the website's own). Reorder with ▲ ▼, delete with the bin. `Ctrl+R` once after adding a page or changing a URL/logo. |
 | `Show as servers` | `off` | One server icon per page at the top of the server list + full-width pages. Off = home sidebar tabs. |
 | `Keep loaded in background` | `on` | Keeps pages alive when you leave them. Off = they unload and reload on every visit. |
+| `Unload after (minutes)` | `5` | How long an unused page stays loaded in the background before it unloads. `0` = never. |
 
 ---
 
@@ -85,7 +87,7 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 | :--- | :--- |
 | Page is empty / blocked | Press `Ctrl+R` once after adding it or changing its URL. |
 | Still empty | Open the URL in a browser — if it doesn't load there, it won't load here either. |
-| Logo shows a letter | The image URL is wrong or blocked — `Ctrl+R` after changing it, or try another image. |
+| Logo shows a letter | The site has no usable logo, or your custom logo URL is wrong/blocked — `Ctrl+R` after changing it, or set another image. |
 | Nothing shows after install | Discord wasn't fully restarted. Quit it from the tray and reopen. |
 | Can't close Discord to restart | Discord is running as administrator — close it from the tray or Task Manager. |
 

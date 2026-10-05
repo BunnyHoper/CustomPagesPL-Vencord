@@ -6,7 +6,9 @@
 
 import { addResponseHeaderHook, CspPolicies } from "@main/csp";
 import { RendererSettings } from "@main/settings";
-import { app, IpcMainInvokeEvent, session } from "electron";
+import { app, IpcMainInvokeEvent, net, session } from "electron";
+
+import { DEFAULT_PAGES } from "./defaults";
 
 const MONTH_SECONDS = 60 * 60 * 24 * 30;
 const embedHosts = new Set<string>();
@@ -98,17 +100,29 @@ function hookHeaders() {
     });
 }
 
-function permitImage(url: string) {
+// Only well-formed http(s) origins ever reach the CSP: a stray character like "," would
+// split Discord's CSP header into two policies and block every embedded page.
+const SAFE_HOST = /^(?:[a-z0-9-]+\.)*[a-z0-9-]+(?::\d{1,5})?$/i;
+
+function safeOrigin(url: string) {
     try {
-        allowDirective(new URL(url).origin, "img-src");
+        const parsed = new URL(url);
+        if ((parsed.protocol === "http:" || parsed.protocol === "https:") && SAFE_HOST.test(parsed.host))
+            return parsed;
     } catch { /* invalid URL */ }
+    return null;
+}
+
+function permitImage(url: string) {
+    const parsed = safeOrigin(url);
+    if (parsed) allowDirective(parsed.origin, "img-src");
 }
 
 function permitEmbed(url: string) {
-    const host = hostOf(url);
-    if (host === "") return;
-    embedHosts.add(host);
-    allowDirective(new URL(url).origin, "frame-src");
+    const parsed = safeOrigin(url);
+    if (!parsed) return;
+    embedHosts.add(parsed.host);
+    allowDirective(parsed.origin, "frame-src");
     hookHeaders();
 }
 
@@ -133,5 +147,69 @@ function permitPages(pages: SavedPage[] | undefined) {
 }
 
 // Apply the saved pages before the main frame loads: no extra Ctrl+R after a Discord restart.
-permitPages(RendererSettings.store.plugins?.["Custom Pages"]?.pages);
-RendererSettings.addChangeListener("plugins.Custom Pages.pages", (pages: SavedPage[]) => permitPages(pages));
+// Never edited yet → the two default GitHub pages (defaults.ts), which the renderer shows as well.
+// No settings change listener on purpose: it fires on every keystroke while a URL is typed.
+// New/edited pages are allowed when opened (allowEmbed) and need one Ctrl+R.
+permitPages(RendererSettings.store.plugins?.["Custom Pages"]?.pages ?? DEFAULT_PAGES);
+
+// Website logo for pages without a custom one. Fetched here (no CSP in the main process)
+// and handed back as a data: URL, which the renderer caches.
+const MAX_ICON_BYTES = 512 * 1024;
+
+async function fetchWithTimeout(url: string, ms = 8000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    try {
+        return await net.fetch(url, { signal: controller.signal, redirect: "follow" });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function imageAsDataUrl(url: string) {
+    try {
+        const res = await fetchWithTimeout(url);
+        const type = res.headers.get("content-type")?.split(";")[0].trim() ?? "";
+        if (!res.ok || !type.startsWith("image/")) return null;
+        const bytes = Buffer.from(await res.arrayBuffer());
+        if (bytes.length === 0 || bytes.length > MAX_ICON_BYTES) return null;
+        return `data:${type};base64,${bytes.toString("base64")}`;
+    } catch {
+        return null;
+    }
+}
+
+// <link rel="icon|shortcut icon|apple-touch-icon" href="..." sizes="..."> → candidates, biggest first.
+function iconLinks(html: string, base: string) {
+    const found: { href: string; size: number; }[] = [];
+    for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
+        const rel = tag.match(/\brel\s*=\s*["']([^"']+)["']/i)?.[1].toLowerCase() ?? "";
+        if (!/\b(icon|apple-touch-icon)\b/.test(rel) || rel.includes("mask-icon")) continue;
+        const href = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1];
+        if (!href) continue;
+        const size = Number(tag.match(/\bsizes\s*=\s*["'](\d+)x\d+/i)?.[1] ?? (rel.includes("apple") ? 180 : 32));
+        try {
+            found.push({ href: new URL(href, base).href, size });
+        } catch { /* bad href */ }
+    }
+    return found.sort((a, b) => b.size - a.size).map(icon => icon.href);
+}
+
+export async function fetchSiteIcon(_event: IpcMainInvokeEvent, pageUrl: string): Promise<string | null> {
+    const parsed = safeOrigin(pageUrl);
+    if (!parsed) return null;
+
+    const candidates: string[] = [];
+    try {
+        const res = await fetchWithTimeout(parsed.href);
+        if (res.ok && (res.headers.get("content-type") ?? "").includes("html"))
+            candidates.push(...iconLinks((await res.text()).slice(0, 300_000), res.url || parsed.href));
+    } catch { /* site unreachable: fall back below */ }
+    candidates.push(`${parsed.origin}/favicon.ico`);
+
+    for (const url of candidates) {
+        const data = await imageAsDataUrl(url);
+        if (data) return data;
+    }
+    return null;
+}
