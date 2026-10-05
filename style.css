@@ -1,0 +1,155 @@
+.vc-customPages-page {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: var(--background-primary);
+}
+
+.vc-customPages-keeper {
+    position: fixed;
+    /* Above sidebar bits like the DM search bar (z 2), below popouts/modals (z 1002). */
+    z-index: 100;
+}
+
+.vc-customPages-frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background-color: var(--background-primary);
+}
+
+.vc-customPages-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted, #949ba4);
+    font-size: 14px;
+}
+
+/* Server-list icons */
+.vc-customPages-server {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    width: 72px;
+    margin-bottom: 8px;
+}
+
+.vc-customPages-server-pill {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 4px;
+    height: 0;
+    border-radius: 0 4px 4px 0;
+    background: var(--interactive-active, #fff);
+    transform: translateY(-50%);
+    transition: height 0.15s ease;
+}
+
+.vc-customPages-server:hover .vc-customPages-server-pill {
+    height: 20px;
+}
+
+.vc-customPages-server-selected .vc-customPages-server-pill,
+.vc-customPages-server-selected:hover .vc-customPages-server-pill {
+    height: 40px;
+}
+
+.vc-customPages-server-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--background-secondary, #2b2d31);
+    cursor: pointer;
+    transition: border-radius 0.15s ease;
+}
+
+.vc-customPages-server:hover .vc-customPages-server-icon,
+.vc-customPages-server-selected .vc-customPages-server-icon {
+    border-radius: 12px;
+}
+
+.vc-customPages-server-icon .vc-customPages-icon {
+    width: 26px;
+    height: 26px;
+}
+
+/* While a page is open in server mode: hide Home's "selected" pill and the user panel underneath. */
+.vc-customPages-server-active nav[aria-label] [class*="tutorialContainer_"]:first-child [class*="item_"][class*="selected_"] {
+    height: 0 !important;
+    opacity: 0;
+}
+
+.vc-customPages-server-active section[class*="panels_"] {
+    visibility: hidden;
+}
+
+/* Logos */
+.vc-customPages-icon {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+}
+
+.vc-customPages-letter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--brand-500, #5865f2);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.vc-customPages-contents {
+    display: contents;
+}
+
+/* Settings editor */
+.vc-customPages-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+}
+
+.vc-customPages-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.vc-customPages-card-logo {
+    display: flex;
+    width: 24px;
+    height: 24px;
+}
+
+.vc-customPages-card-logo .vc-customPages-icon {
+    width: 24px;
+    height: 24px;
+}
+
+.vc-customPages-card-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.vc-customPages-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}

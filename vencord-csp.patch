@@ -1,0 +1,30 @@
+diff --git a/src/main/csp/index.ts b/src/main/csp/index.ts
+index adf1c73..7aef8d0 100644
+--- a/src/main/csp/index.ts
++++ b/src/main/csp/index.ts
+@@ -138,9 +138,24 @@ const patchCsp = (headers: PolicyMap) => {
+     }
+ };
+ 
++type ResponseHeaderHook = (details: { url: string; resourceType: string; responseHeaders: PolicyMap; }) => void;
++const responseHeaderHooks = new Set<ResponseHeaderHook>();
++
++export function addResponseHeaderHook(hook: ResponseHeaderHook) {
++    responseHeaderHooks.add(hook);
++}
++
+ export function initCsp() {
+-    session.defaultSession.webRequest.onHeadersReceived(({ responseHeaders, resourceType }, cb) => {
++    session.defaultSession.webRequest.onHeadersReceived(({ url, responseHeaders, resourceType }, cb) => {
+         if (responseHeaders) {
++            for (const hook of responseHeaderHooks) {
++                try {
++                    hook({ url, resourceType, responseHeaders });
++                } catch (e) {
++                    console.error("[Vencord] response header hook failed", e);
++                }
++            }
++
+             if (resourceType === "mainFrame")
+                 patchCsp(responseHeaders);
+ 
