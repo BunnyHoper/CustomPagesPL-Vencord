@@ -168,3 +168,14 @@
     font-weight: 600;
     cursor: pointer;
 }
+
+/* The page icons can make the server list scroll, and themes (e.g. DarkMatter) paint its scrollbar
+   as an always-visible bar next to the icons. Hide it there; the mouse wheel still scrolls. */
+nav[class*="guilds_"] [class*="scroller_"] {
+    scrollbar-width: none !important;
+}
+
+nav[class*="guilds_"] [class*="scroller_"]::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+}
