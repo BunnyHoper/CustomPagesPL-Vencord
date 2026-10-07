@@ -5,21 +5,6 @@
     background-color: var(--background-primary);
 }
 
-.vc-customPages-keeper {
-    position: fixed;
-    /* Above sidebar bits like the DM search bar (z 2), below popouts/modals (z 1002). */
-    z-index: 100;
-}
-
-.vc-customPages-frame {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
-    background-color: var(--background-primary);
-}
-
 .vc-customPages-empty {
     display: flex;
     align-items: center;
@@ -157,16 +142,6 @@
 .vc-customPages-empty {
     flex-direction: column;
     gap: 12px;
-}
-
-.vc-customPages-reload {
-    padding: 8px 16px;
-    border: 0;
-    border-radius: 8px;
-    background: var(--brand-500, #5865f2);
-    color: #fff;
-    font-weight: 600;
-    cursor: pointer;
 }
 
 /* The page icons can make the server list scroll, and themes (e.g. DarkMatter) paint its scrollbar

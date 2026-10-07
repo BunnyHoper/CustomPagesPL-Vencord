@@ -59,7 +59,7 @@ export const settings = definePluginSettings({
         displayName: "Keep loaded in background",
         default: true,
         onChange(value: boolean) {
-            if (!value) dropHiddenFrames();
+            if (!value) dropHiddenPages();
         }
     },
     unloadAfter: {
@@ -133,22 +133,10 @@ const usePrivateChannelListItem: (id: string) => PrivateChannelListItem = findBy
     "useState(-1)"
 );
 
-// The iframes live in a fixed layer on <body>, not inside the route, so leaving a
-// page only hides it. Moving an iframe in the DOM reloads it, so it is never re-parented.
-let keeper: HTMLDivElement | null = null;
-const frames = new Map<string, { el: HTMLIFrameElement; src: string; }>();
-
-function getKeeper() {
-    if (!keeper) {
-        keeper = document.createElement("div");
-        keeper.className = cl("keeper");
-        keeper.hidden = true;
-        document.body.appendChild(keeper);
-    }
-    return keeper;
-}
-
-// Background frames unload on their own after `unloadAfter` minutes hidden.
+// Each page is a real Chromium view (WebContentsView, see native.ts) laid over the page area.
+// Pages stay loaded when you leave them and unload on their own after `unloadAfter` minutes.
+const loaded = new Set<string>();
+let visibleId: string | null = null;
 const unloadTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function cancelUnload(id: string) {
@@ -161,129 +149,102 @@ function scheduleUnload(id: string) {
     if (unloadTimers.has(id) || !(minutes > 0)) return;
     unloadTimers.set(id, setTimeout(() => {
         unloadTimers.delete(id);
-        const entry = frames.get(id);
-        if (entry && (entry.el.hidden || !keeper || keeper.hidden)) dropFrame(id);
+        if (visibleId !== id) dropPage(id);
     }, minutes * 60_000));
 }
 
-function showFrame(id: string, src: string, title: string) {
-    let entry = frames.get(id);
-    if (!entry || entry.src !== src) {
-        entry?.el.remove();
-        const el = document.createElement("iframe");
-        el.className = cl("frame");
-        el.src = src;
-        entry = { el, src };
-        frames.set(id, entry);
-        getKeeper().appendChild(el);
-    }
-    entry.el.title = title;
-    for (const [key, { el }] of frames) {
-        el.hidden = key !== id;
-        if (key === id) cancelUnload(key);
-        else scheduleUnload(key);
-    }
-}
-
-export function dropFrame(id: string) {
+export function dropPage(id: string) {
     cancelUnload(id);
-    frames.get(id)?.el.remove();
-    frames.delete(id);
+    loaded.delete(id);
+    if (visibleId === id) visibleId = null;
+    Native?.destroyPage(id);
 }
 
-// Drops every frame that is not on screen right now.
-function dropHiddenFrames() {
-    for (const [id, { el }] of frames)
-        if (!keeper || keeper.hidden || el.hidden) dropFrame(id);
+// Drops every page that is not on screen right now.
+function dropHiddenPages() {
+    for (const id of [...loaded]) if (id !== visibleId) dropPage(id);
 }
 
-function destroyKeeper() {
-    for (const id of [...frames.keys()]) dropFrame(id);
-    keeper?.remove();
-    keeper = null;
+function dropAllPages() {
+    for (const id of [...unloadTimers.keys()]) cancelUnload(id);
+    loaded.clear();
+    visibleId = null;
+    Native?.destroyAll();
 }
 
-// Every https page and local http one is always embeddable (native.ts). Any other http address
-// (e.g. another PC on your LAN) is only allowed by Discord's CSP from the next load on.
-const embeddableAtLoad = new Set<string>();
-
-function needsReload(src: string) {
-    const url = new URL(src);
-    if (url.protocol === "https:" || url.hostname === "localhost" || url.hostname === "127.0.0.1") return false;
-    return !embeddableAtLoad.has(url.origin);
+// Discord's modals and menus are web content: a native view always paints above them,
+// so the page is hidden while one is open (e.g. this plugin's settings).
+function overlayOpen() {
+    return document.querySelector("[class*='layerContainer_'] [role='dialog'], [class*='layerContainer_'] [role='menu']") !== null;
 }
 
 const PageView = ErrorBoundary.wrap(function PageView({ location }: { location?: { pathname: string; }; }) {
     const { pages } = settings.use(["pages"]);
     const id = pageIdFor(location?.pathname ?? window.location.pathname);
     const page = pages.find(p => p.id === id);
-    const url = pageUrl(page?.url);
-    const blocked = url !== null && needsReload(url);
-    const src = blocked ? null : url;
-    const title = page?.name || "Page";
+    const src = pageUrl(page?.url);
     const anchorRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         const anchor = anchorRef.current;
-        if (!anchor || !id || src === null) return;
+        if (!anchor || !id || src === null || !Native) return;
 
-        const layer = getKeeper();
-        let cancelled = false;
         let raf = 0;
         let last = "";
+        let hidden = false;
 
-        // Follows the anchor every frame: sidebar/window changes move it without resizing it.
-        const place = () => {
+        const measure = () => {
             const r = anchor.getBoundingClientRect();
             let { left } = r;
-
             // Server mode: also cover the DM column and the user panel below it.
             if (settings.store.asServer) {
                 const list = anchor.parentElement?.parentElement?.querySelector("[class*='sidebarList_']");
                 if (list) left = list.getBoundingClientRect().left;
             }
+            return { x: left, y: r.top, w: r.right - left, h: r.height };
+        };
 
-            const width = r.right - left;
-            const next = `${r.top},${left},${width},${r.height}`;
+        // Follows the anchor every frame: sidebar/window changes move it without resizing it.
+        const follow = () => {
+            const rect = measure();
+            const next = `${rect.x},${rect.y},${rect.w},${rect.h}`;
             if (next !== last) {
                 last = next;
-                layer.style.top = `${r.top}px`;
-                layer.style.left = `${left}px`;
-                layer.style.width = `${width}px`;
-                layer.style.height = `${r.height}px`;
+                Native.setBounds(id, rect);
             }
-            raf = requestAnimationFrame(place);
+            const hide = overlayOpen();
+            if (hide !== hidden) {
+                hidden = hide;
+                Native.setVisible(id, !hide);
+            }
+            raf = requestAnimationFrame(follow);
         };
 
-        void (async () => {
-            if (Native) await Native.allowEmbed(src);
-            if (cancelled) return;
-            showFrame(id, src, title);
-            place();
-            layer.hidden = false;
-            document.body.classList.toggle(ACTIVE_SERVER_CLASS, settings.store.asServer);
-        })();
+        cancelUnload(id);
+        loaded.add(id);
+        visibleId = id;
+        Native.showPage(id, src, measure());
+        last = "";
+        follow();
+        document.body.classList.toggle(ACTIVE_SERVER_CLASS, settings.store.asServer);
 
         return () => {
-            cancelled = true;
             cancelAnimationFrame(raf);
-            layer.hidden = true;
             document.body.classList.remove(ACTIVE_SERVER_CLASS);
-            if (!settings.store.keepLoaded) dropFrame(id);
-            else scheduleUnload(id);
+            if (visibleId === id) visibleId = null;
+            if (!settings.store.keepLoaded) dropPage(id);
+            else {
+                Native.setVisible(id, false);
+                scheduleUnload(id);
+            }
         };
-    }, [id, src, title]);
+    }, [id, src]);
 
     return (
         <div className={cl("page")} ref={anchorRef}>
             {src === null && (
                 <div className={cl("empty")}>
-                    {blocked ? (
-                        <>
-                            <span>Discord needs one reload to allow {new URL(url!).host}.</span>
-                            <button className={cl("reload")} onClick={() => window.location.reload()}>Reload Discord</button>
-                        </>
-                    ) : page ? "This page has no valid URL. Right-click its icon to edit it." : "This page doesn't exist anymore."}
+                    {page ? "This page has no valid URL. Right-click its icon to edit it." : "This page doesn't exist anymore."}
                 </div>
             )}
         </div>
@@ -470,12 +431,6 @@ export default definePlugin({
     settings,
 
     start() {
-        for (const page of settings.store.pages) {
-            const src = pageUrl(page.url);
-            if (src === null) continue;
-            embeddableAtLoad.add(new URL(src).origin);
-            if (Native) void Native.allowEmbed(src);
-        }
         // Deferred so items other plugins add while starting (e.g. Nighty Tab) stay above ours.
         serverListTimer = setTimeout(() => addServerListElement(ServerListRenderPosition.Above, PageServerIcons));
     },
@@ -483,7 +438,7 @@ export default definePlugin({
     stop() {
         clearTimeout(serverListTimer);
         removeServerListElement(ServerListRenderPosition.Above, PageServerIcons);
-        destroyKeeper();
+        dropAllPages();
     },
 
     patches: [

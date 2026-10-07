@@ -13,7 +13,7 @@ import { Margins } from "@components/margins";
 import { Paragraph } from "@components/Paragraph";
 import { TextInput } from "@webpack/common";
 
-import { cl, dropFrame, Page, PageLogo, pageUrl, settings } from ".";
+import { cl, dropPage, Page, PageLogo, pageUrl, settings } from ".";
 
 function newId() {
     return Math.random().toString(36).slice(2, 8);
@@ -45,7 +45,7 @@ function move(index: number, by: -1 | 1) {
 }
 
 function remove(id: string) {
-    dropFrame(id);
+    dropPage(id);
     updatePages(pages => pages.filter(p => p.id !== id));
 }
 
