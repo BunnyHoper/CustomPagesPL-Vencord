@@ -11,7 +11,9 @@ import { app, IpcMainInvokeEvent, net, session } from "electron";
 import { DEFAULT_PAGES } from "./defaults";
 
 const MONTH_SECONDS = 60 * 60 * 24 * 30;
-const embedHosts = new Set<string>();
+// Sites (registrable domains) of your pages. Unlocking is per site, not per exact host, because
+// pages often redirect within their site (youtube.com → www.youtube.com, open.spotify.com → accounts.spotify.com).
+const embedSites = new Set<string>();
 let headerHooked = false;
 
 // Discord's CSP only allows frames/images from known hosts. It is applied to the
@@ -50,6 +52,17 @@ void app.whenReady().then(() => {
 
     install(null, null);
 });
+
+// "www.youtube.com:443" → "youtube.com", "a.b.co.uk" → "b.co.uk"; IPs and localhost stay as they are.
+function siteOf(host: string) {
+    const name = host.replace(/:\d+$/, "").toLowerCase();
+    if (name === "localhost" || /^[\d.]+$/.test(name)) return name;
+    const labels = name.split(".");
+    if (labels.length <= 2) return name;
+    const [second, top] = labels.slice(-2);
+    const keep = top.length === 2 && /^(co|com|org|net|gov|edu|ac)$/.test(second) ? 3 : 2;
+    return labels.slice(-keep).join(".");
+}
 
 function hostOf(url: string) {
     try {
@@ -90,7 +103,7 @@ function hookHeaders() {
     headerHooked = true;
 
     addResponseHeaderHook(({ url, responseHeaders }) => {
-        if (!embedHosts.has(hostOf(url))) return;
+        if (!embedSites.has(siteOf(hostOf(url)))) return;
 
         allowEmbedDocument(responseHeaders);
         const key = Object.keys(responseHeaders).find(name => name.toLowerCase() === "set-cookie");
@@ -121,7 +134,7 @@ function permitImage(url: string) {
 function permitEmbed(url: string) {
     const parsed = safeOrigin(url);
     if (!parsed) return;
-    embedHosts.add(parsed.host);
+    embedSites.add(siteOf(parsed.host));
     allowDirective(parsed.origin, "frame-src");
     hookHeaders();
 }
