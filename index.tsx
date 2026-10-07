@@ -419,12 +419,21 @@ function PageTab({ page, selected }: { page: Page; selected: boolean; }) {
     );
 }
 
-const PageTabs = ErrorBoundary.wrap(function PageTabs() {
+// Discord's own divider component (the one under Quests), handed over by the patch.
+type Divider = () => ReactElement;
+
+// Your tabs go at the very top of the home list, above Friends, followed by Discord's divider.
+const PageTabs = ErrorBoundary.wrap(function PageTabs({ Divider }: { Divider?: Divider; }) {
     const current = useCurrentPageId();
     const { asServer, pages } = settings.use(["asServer", "pages"]);
 
-    if (asServer) return null;
-    return <>{pages.map(page => <PageTab key={page.id} page={page} selected={current === page.id} />)}</>;
+    if (asServer || pages.length === 0) return null;
+    return (
+        <>
+            {pages.map(page => <PageTab key={page.id} page={page} selected={current === page.id} />)}
+            {Divider && <Divider />}
+        </>
+    );
 }, { noop: true });
 
 const PageServerIcons = ErrorBoundary.wrap(function PageServerIcons() {
@@ -490,8 +499,10 @@ export default definePlugin({
         {
             find: '"section-divider-top"',
             replacement: {
-                match: /\(0,\i\.jsx\)\(\i,\{\},"section-divider-top"\)/,
-                replace: "$self.renderTabs(),$&"
+                // Before Friends (top of the list); also captures Discord's divider component (used
+                // under Quests) so the same separator goes under your tabs.
+                match: /(\(0,\i\.jsx\)\(\i,\{selected:\i===\i\.\i\.FRIENDS\},"friends"\))(.{0,3000}?\(0,\i\.jsx\)\((\i),\{\},"section-divider-top"\))/,
+                replace: "$self.renderTabs($3),$1$2"
             }
         },
         {
@@ -510,8 +521,8 @@ export default definePlugin({
         }
     ],
 
-    renderTabs() {
-        return <PageTabs />;
+    renderTabs(Divider?: Divider) {
+        return <PageTabs key="vc-custom-pages" Divider={Divider} />;
     },
 
     renderPage(props: { location?: { pathname: string; }; }) {
