@@ -21,8 +21,8 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 *   **Automatic Logos:** Each page uses the website's own logo, downloaded once and cached — no logo URL needed. Want another one? Set a custom logo URL. Nothing found → the first letter of the page name.
 *   **Stays Loaded:** Leave a page and it keeps running in the background — come back and it's exactly where you left it. After **5 minutes** unused it unloads on its own to free memory (configurable).
 *   **Right-Click → Settings:** Right-click any page icon or tab to jump straight into the editor.
-*   **Real Chromium Views:** Each page runs in its own Chromium view (Electron `WebContentsView`, like a separate browser tab) laid over Discord — not an iframe. No embed blocking, logins work (Google, Cloudflare, …) and stay saved, and a heavy page can't slow Discord's own UI.
-*   **Popups Handled:** Login popups open in a small window on the same session; links to other websites open in your browser.
+*   **Embed Unlocker:** Any `https` page (and local `http`) can be embedded right away — switch a page to another website and it just loads, no reload. `X-Frame-Options` / `frame-ancestors` are stripped only for your pages' hosts, so they aren't blocked.
+*   **Session Keeper:** Rewrites the pages' cookies so your logins survive inside the embed.
 *   **Restart-Safe:** Restarting or reloading Discord while on a page sends you back to the app instead of Discord's 404 page.
 *   **Plays Nice:** Works next to other plugins that add tabs or server icons, like [Nighty Tab](https://github.com/BunnyHoper/Nighty-Tab-Plugin) — its icon/tab stays above your pages.
 
@@ -35,8 +35,9 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 | `index.tsx` | **Core** | The plugin: settings, tabs, server icons, `/custom-pages/<id>` pages. |
 | `PagesEditor.tsx` | **UI** | The page list editor shown in the plugin settings. |
 | `defaults.ts` | **Data** | The two pages that come with the plugin (the author's GitHub), shown until you edit the list. |
-| `native.ts` | **Native** | Main-process side: one Chromium view per page, popups, logos, restart redirect. |
-| `style.css` | **Style** | Server icons, page area and the editor. |
+| `native.ts` | **Native** | Main-process side: CSP, header and cookie fixes, restart redirect. |
+| `style.css` | **Style** | Server icons, embedded pages and the editor. |
+| `vencord-csp.patch` | **Patch** | Small patch for Vencord's `src/main/csp/index.ts` that lets the plugin hook response headers. **Required.** |
 
 ---
 
@@ -49,17 +50,23 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
     pnpm install --frozen-lockfile
     ```
 
-2.  **Add the plugin:** Copy `index.tsx`, `PagesEditor.tsx`, `defaults.ts`, `native.ts` and `style.css` into `src/userplugins/customPages/`. No Vencord patch needed.
+2.  **Add the plugin:** Copy `index.tsx`, `PagesEditor.tsx`, `native.ts` and `style.css` into `src/userplugins/customPages/`.
 
-3.  **Build & inject:**
+3.  **Apply the CSP patch** (from the Vencord folder, with `vencord-csp.patch` copied there):
+    ```bash
+    git apply vencord-csp.patch
+    ```
+    > Already applied for another plugin (e.g. Nighty Tab)? Skip this step — it's the same patch.
+
+4.  **Build & inject:**
     ```bash
     pnpm build
     pnpm inject
     ```
 
-4.  **Fully restart Discord:** System tray → right-click Discord → **Quit Discord**, then open it again.
+5.  **Fully restart Discord:** System tray → right-click Discord → **Quit Discord**, then open it again.
 
-5.  **Add your pages:** Settings → Vencord → Plugins → **Custom Pages** → **Add page**, fill in a name and URL (the logo is picked up from the website).
+6.  **Add your pages:** Settings → Vencord → Plugins → **Custom Pages** → **Add page**, fill in a name and URL (the logo is picked up from the website).
 
 ---
 
@@ -67,7 +74,7 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 
 | Setting | Default | Action |
 | :--- | :---: | :--- |
-| `Pages` | — | Your pages: name, URL and an optional custom logo (blank = the website's own). Reorder with ▲ ▼, delete with the bin. Changes apply right away. |
+| `Pages` | — | Your pages: name, URL and an optional custom logo (blank = the website's own). Reorder with ▲ ▼, delete with the bin. Changes apply right away (only a plain `http` address on another device of your LAN needs one reload — the page offers a button). |
 | `Show as servers` | `off` | One server icon per page at the top of the server list + full-width pages. Off = home sidebar tabs. |
 | `Keep loaded in background` | `on` | Keeps pages alive when you leave them. Off = they unload and reload on every visit. |
 | `Unload after (minutes)` | `5` | How long an unused page stays loaded in the background before it unloads. `0` = never. |
@@ -78,6 +85,7 @@ Stop alt-tabbing between Discord and your dashboards (it's a waste of time). **C
 
 | Symptom | Fix |
 | :--- | :--- |
+| Page is empty / blocked | Open the URL in a browser first. A plain `http` LAN address needs one reload — use the page's **Reload Discord** button. |
 | Still empty | Open the URL in a browser — if it doesn't load there, it won't load here either. |
 | Logo shows a letter | The site has no usable logo (e.g. a login page without favicon) — set a custom logo URL for that page. |
 | Nothing shows after install | Discord wasn't fully restarted. Quit it from the tray and reopen. |
