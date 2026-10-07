@@ -497,15 +497,15 @@ export default definePlugin({
         {
             find: ".QUEST_HOME,render:",
             replacement: {
-                match: /\(0,(\i)\.jsx\)\((\i\.\i),\{path:\i\.BVt\.QUEST_HOME,render:\i,impressionName:\i\.ImpressionNames\.QUEST_HOME,disableTrack:!0\}\)/,
+                match: /\(0,(\i)\.jsx\)\((\i\.\i),\{path:\i\.\i\.QUEST_HOME,render:\i,impressionName:\i\.ImpressionNames\.QUEST_HOME,disableTrack:!0\}\)/,
                 replace: '$&,(0,$1.jsx)($2,{path:"/custom-pages",render:$self.renderPage})'
             }
         },
         {
             find: "isChatRoute:!0",
             replacement: {
-                match: /F\.BVt\.FAMILY_CENTER\],render:(\i),isChatRoute:!0\}/,
-                replace: 'F.BVt.FAMILY_CENTER],render:$1,isChatRoute:!0},{path:["/custom-pages"],render:$1}'
+                match: /(\i\.\i\.FAMILY_CENTER\]),render:(\i),isChatRoute:!0\}/,
+                replace: '$1,render:$2,isChatRoute:!0},{path:["/custom-pages"],render:$2}'
             }
         }
     ],
